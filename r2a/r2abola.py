@@ -46,14 +46,10 @@ class R2ABola(IR2A):
         print(self.current_seconds_on_buffer)
         print(">>>>>>>>>")
 
-        max_throughput = self.qi[0]
-        for i in self.qi:
-            if self.throughput > i:
-                max_throughput = i
-
-        if self.new_seconds_on_buffer > 25:
-            index += 3
-        elif self.new_seconds_on_buffer > 8:
+        if self.new_seconds_on_buffer > 20:
+            index += 2
+        if self.new_seconds_on_buffer > 15:
+            print('entrou > 10')
             if diff_buffer == 0:                    # aumenta normal
                 index += 1
             elif diff_buffer > 0:                   # aumenta muito
@@ -63,26 +59,26 @@ class R2ABola(IR2A):
             elif diff_buffer < -5:                  # diminui muito mesmo
                 index -= 3
         else:
+            print('entrou < 10')
             if diff_buffer == 0:                    # mantém
                 index += 0
             elif diff_buffer > 0:                   # aumenta um pouquinho
                 index += 1
             elif diff_buffer < 0:                   # diminui muito
                 index -= 2
-            elif diff_buffer < -5:                  # diminui muito mesmo
+            elif diff_buffer < -4:                  # diminui muito mesmo
                 index -= 3
 
         index = max(0, min(index, 19))
+        throughput_qi = self.qi[0]
+        for i in self.qi:
+            if self.throughput > i:
+                throughput_qi = i
+        if throughput_qi < 0.5 * self.qi[index]:
+            index = self.qi.index(throughput_qi)
+
         print(f"CURRENT QI: {index}")
-
-        if max_throughput > 2 * self.qi[index]:
-            index += 2
-        elif max_throughput < 0.5 * self.qi[index]:
-            index -= 4
-
         index = max(0, min(index, 19))
-        print(f"CURRENT QI: {index}")
-
         # print(f"selected qi: {self.current_qi}")
 
         self.current_qi = self.qi[index]
@@ -95,7 +91,6 @@ class R2ABola(IR2A):
         t = time.perf_counter() - self.request_time
         self.throughput = msg.get_bit_length() / t
         self.new_seconds_on_buffer = self.whiteboard.get_amount_video_to_play()
-
         self.send_up(msg)
 
     def initialize(self):
