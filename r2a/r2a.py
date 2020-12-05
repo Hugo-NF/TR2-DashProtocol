@@ -37,17 +37,22 @@ class R2A(IR2A):
 
     def handle_segment_size_request(self, msg):
         self.request_time = time.perf_counter()
-        mean_bandwidth = mean(self.bandwidths[-10:])     # média das últimas 10 qualidades de rede
+        mean_bandwidth = mean(self.bandwidths[-5:])         # média das últimas 10 qualidades de rede
 
         # para quantizar a média da qualidade de rede e a última qualidade de rede escolhida
         last_throughput = self.qi[0]
         measured_throughput = self.qi[0]
+        max_throughput = self.qi[0]
         for i in self.qi:
             if self.bandwidths[-1] * 0.7 > i:
                 measured_throughput = i                         # qualidade correspondente à média da qualidade de rede
             if self.current_qi > i:
                 last_throughput = i                             # qualidade correspondente à última qualidade escolhida
+            if mean_bandwidth > i:
+                max_throughput = i
 
+        k5 = 1.3
+        max_index = self.qi.index(max_throughput) * k5
         last_index = self.qi.index(last_throughput)             # índice da última qualidade requisitada
         measured_index = self.qi.index(measured_throughput)     # índice da qualidade do último throughput (rede)
         self.current_buffer = self.whiteboard.get_amount_video_to_play()
@@ -60,7 +65,7 @@ class R2A(IR2A):
 
         k4 = (measured_index - last_index) * k1 + diff_buffer * k2 + (self.current_buffer - min_buffer) * k3
         if k4 < 0:
-            res = last_index + k4 * 0.9
+            res = last_index + k4 * 0.8
         else:
             res = last_index + k4 * 0.15                        # aumentar este valor (0.15) aumenta muito a qualidade
 
@@ -72,7 +77,7 @@ class R2A(IR2A):
         print(f"result: {res}")
         print('>>>>>>>>>>>>>>>>>')
 
-        bounded_res = max(0, min(int(math.floor(res)), 19))
+        bounded_res = max(0, min(int(math.floor(res)), int(math.floor(max_index)), 19))
         self.current_qi = self.qi[bounded_res]
         msg.add_quality_id(self.current_qi)
         self.send_down(msg)
