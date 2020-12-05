@@ -31,13 +31,17 @@ class R2A(IR2A):
 
         t = time.perf_counter() - self.request_time
         self.response_times.append(t)
-        self.bandwidths.append(msg.get_bit_length() / t)
+        for i in range(5):
+            self.bandwidths.append(msg.get_bit_length() / t)
+        self.current_qi = self.bandwidths[-1]
 
         self.send_up(msg)
 
     def handle_segment_size_request(self, msg):
         self.request_time = time.perf_counter()
-        mean_bandwidth = mean(self.bandwidths[-5:])         # média das últimas 10 qualidades de rede
+
+        # média ponderada das últimas 5 qualidades de rede
+        mean_bandwidth = numpy.average(self.bandwidths[-5:], weights=[1, 2, 3, 4, 5])
 
         # para quantizar a média da qualidade de rede e a última qualidade de rede escolhida
         last_throughput = self.qi[0]
@@ -51,7 +55,7 @@ class R2A(IR2A):
             if mean_bandwidth > i:
                 max_throughput = i
 
-        k5 = 1.3
+        k5 = 1.2
         max_index = self.qi.index(max_throughput) * k5
         last_index = self.qi.index(last_throughput)             # índice da última qualidade requisitada
         measured_index = self.qi.index(measured_throughput)     # índice da qualidade do último throughput (rede)
@@ -60,7 +64,7 @@ class R2A(IR2A):
 
         k1 = 0.75
         k2 = 1.2
-        k3 = 0.3
+        k3 = 0.35
         min_buffer = 7
 
         k4 = (measured_index - last_index) * k1 + diff_buffer * k2 + (self.current_buffer - min_buffer) * k3
