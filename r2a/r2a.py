@@ -5,7 +5,6 @@ import numpy
 from player.parser import *
 from r2a.ir2a import IR2A
 import time
-from statistics import mean
 
 
 class R2A(IR2A):
@@ -14,10 +13,9 @@ class R2A(IR2A):
         IR2A.__init__(self, id)
         self.request_time = 0
         self.qi = []
-        self.response_times = []
-        self.bandwidths = []            # vetor de qualidades de rede
+        self.bandwidths = []
         self.parsed_mpd = ''
-        self.current_qi = 0             # qualidade escolhida atual
+        self.current_qi = 0
         self.current_buffer = 0
         self.last_buffer = 0
 
@@ -29,36 +27,38 @@ class R2A(IR2A):
         self.parsed_mpd = parse_mpd(msg.get_payload())
         self.qi = self.parsed_mpd.get_qi()
 
+        # inicialmente, preenchemos o vetor de qualidades de rede com o throughput da resposta ao pedido do xml
         t = time.perf_counter() - self.request_time
-        self.response_times.append(t)
+        bps = msg.get_bit_length() / t
         for i in range(5):
-            self.bandwidths.append(msg.get_bit_length() / t)
-        self.current_qi = self.bandwidths[-1]
+            self.bandwidths.append(bps)
 
+        self.current_qi = self.bandwidths[-1]
         self.send_up(msg)
 
     def handle_segment_size_request(self, msg):
         self.request_time = time.perf_counter()
 
-        # média ponderada das últimas 5 qualidades de rede
+        # calculamos a média ponderada das últimas 5 qualidades de rede, com peso maior para a última medida
         mean_bandwidth = numpy.average(self.bandwidths[-5:], weights=[1, 2, 3, 4, 5])
 
-        # para quantizar a média da qualidade de rede e a última qualidade de rede escolhida
+        # quantizamos a média da qualidade de rede e a última qualidade de rede escolhida
         last_throughput = self.qi[0]
         measured_throughput = self.qi[0]
         max_throughput = self.qi[0]
         for i in self.qi:
             if self.bandwidths[-1] * 0.7 > i:
-                measured_throughput = i                         # qualidade correspondente à média da qualidade de rede
+                measured_throughput = i                         # última qualidade de rede medida
             if self.current_qi > i:
-                last_throughput = i                             # qualidade correspondente à última qualidade escolhida
+                last_throughput = i                             # última qualidade de rede requisitada
             if mean_bandwidth > i:
-                max_throughput = i
+                max_throughput = i                              # qualidade média dos últimos 5 throughputs da rede
 
         k5 = 1.2
-        max_index = self.qi.index(max_throughput) * k5
-        last_index = self.qi.index(last_throughput)             # índice da última qualidade requisitada
-        measured_index = self.qi.index(measured_throughput)     # índice da qualidade do último throughput (rede)
+        measured_index = self.qi.index(measured_throughput)     # índice da última qualidade de rede medida
+        last_index = self.qi.index(last_throughput)             # índice da última qualidade de rede requisitada
+        max_index = self.qi.index(max_throughput) * k5          # índice da qualidade média dos últimos 5 throughputs
+
         self.current_buffer = self.whiteboard.get_amount_video_to_play()
         diff_buffer = self.current_buffer - self.last_buffer
 
@@ -68,31 +68,26 @@ class R2A(IR2A):
         min_buffer = 7
 
         k4 = (measured_index - last_index) * k1 + diff_buffer * k2 + (self.current_buffer - min_buffer) * k3
+
+        # baseando-se no padrão AIMD (additive increase, multiplicative decrease), foram definidas diferentes
+        # constantes para subtração ou adição ao QI
         if k4 < 0:
             res = last_index + k4 * 0.8
         else:
-            res = last_index + k4 * 0.15                        # aumentar este valor (0.15) aumenta muito a qualidade
+            res = last_index + k4 * 0.15
 
-        print('>>>>>>>>>>>>>>>>>')
-        print(f"mean bandwidth: {mean_bandwidth}")
-        print(f"diff buffer: {diff_buffer}")
-        print(f"last buffer size: {self.last_buffer}")
-        print(f"current buffer size: {self.current_buffer}")
-        print(f"result: {res}")
-        print('>>>>>>>>>>>>>>>>>')
-
+        # limitação do índice entre 0 e max_throughput
         bounded_res = max(0, min(int(math.floor(res)), int(math.floor(max_index)), 19))
         self.current_qi = self.qi[bounded_res]
+
         msg.add_quality_id(self.current_qi)
         self.send_down(msg)
 
     def handle_segment_size_response(self, msg):
         t = time.perf_counter() - self.request_time
-        self.response_times.append(t)
         bps = msg.get_bit_length() / t
         self.bandwidths.append(bps)
         self.last_buffer = self.whiteboard.get_amount_video_to_play()
-
         self.send_up(msg)
 
     def initialize(self):
