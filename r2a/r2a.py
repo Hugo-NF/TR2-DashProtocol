@@ -1,3 +1,9 @@
+# MEMBROS DO GRUPO                  MATRÍCULA
+
+# CLARA SENRA RABELLO               16/0025737
+# HUGO NASCIMENTO FONSECA           16/0008166
+# JOÃO ANSELMO BANDEIRA DOS REIS    16/0031672
+
 import math
 
 import numpy
