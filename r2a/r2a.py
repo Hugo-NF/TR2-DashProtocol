@@ -53,14 +53,14 @@ class R2A(IR2A):
         measured_throughput = self.qi[0]
         max_throughput = self.qi[0]
         for i in self.qi:
-            if self.bandwidths[-1] * 0.7 > i:
+            if self.bandwidths[-1] > i:
                 measured_throughput = i                         # última qualidade de rede medida
             if self.current_qi > i:
                 last_throughput = i                             # última qualidade de rede requisitada
             if mean_bandwidth > i:
                 max_throughput = i                              # qualidade média dos últimos 5 throughputs da rede
 
-        k5 = 1.2
+        k5 = 1.3
         measured_index = self.qi.index(measured_throughput)     # índice da última qualidade de rede medida
         last_index = self.qi.index(last_throughput)             # índice da última qualidade de rede requisitada
         max_index = self.qi.index(max_throughput) * k5          # índice da qualidade média dos últimos 5 throughputs
@@ -69,18 +69,18 @@ class R2A(IR2A):
         diff_buffer = self.current_buffer - self.last_buffer
 
         k1 = 0.75
-        k2 = 1.2
+        k2 = 1
         k3 = 0.35
         min_buffer = 7
 
-        k4 = (measured_index - last_index) * k1 + diff_buffer * k2 + (self.current_buffer - min_buffer) * k3
+        k4 = ((measured_index - last_index) * k1 + diff_buffer * k2 + (self.current_buffer - min_buffer) * k3) / (k1 + k2 + k3)
 
         # baseando-se no padrão AIMD (additive increase, multiplicative decrease), foram definidas diferentes
         # constantes para subtração ou adição ao QI
         if k4 < 0:
             res = last_index + k4 * 0.8
         else:
-            res = last_index + k4 * 0.15
+            res = last_index + k4 * 0.3
 
         # limitação do índice entre 0 e max_throughput
         bounded_res = max(0, min(int(math.floor(res)), int(math.floor(max_index)), 19))
